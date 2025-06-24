@@ -501,10 +501,20 @@ def save_checkpoint(model, save_path):
 
 def load_checkpoint(model, checkpoint_path):
     if not os.path.exists(checkpoint_path):
-        print('no checkpoint')
-        raise
-    log = model.load_state_dict(torch.load(checkpoint_path), strict=False)
-    model.cuda()
+        print(" [*] checkpoint does not exist!")
+        return
+    print(" [*] Loading checkpoint from %s" % checkpoint_path)
+    state_dict = torch.load(checkpoint_path)
+    model_state_dict = model.state_dict()
+    
+    # Remove keys that have shape mismatches
+    for key in list(state_dict.keys()):
+        if key in model_state_dict and state_dict[key].shape != model_state_dict[key].shape:
+            print(f"Removing {key} due to shape mismatch: {state_dict[key].shape} vs {model_state_dict[key].shape}")
+            del state_dict[key]
+    
+    log = model.load_state_dict(state_dict, strict=False)
+    print(" [*] Load Success! log : ", log)
 
 
 def weights_init(m):

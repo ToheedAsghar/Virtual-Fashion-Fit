@@ -34,9 +34,9 @@ def get_opt():
     parser.add_argument('--fp16', action='store_true', help='use amp')
 
     parser.add_argument('--test_name', type=str, default='test', help='test name')
-    parser.add_argument("--dataroot", default="./data/zalando-hd-resize")
+    parser.add_argument("--dataroot", default="./data")
     parser.add_argument("--datamode", default="test")
-    parser.add_argument("--data_list", default="./data/zalando-hd-resize/test_pairs.txt")
+    parser.add_argument("--data_list", default="./data/test_pairs.txt")
     parser.add_argument("--output_dir", type=str)
     parser.add_argument("--datasetting", default="paired")
     parser.add_argument("--fine_width", type=int, default=768)
@@ -81,14 +81,21 @@ def get_opt():
 
 def load_checkpoint_G(model, checkpoint_path):
     if not os.path.exists(checkpoint_path):
-        print("Invalid path!")
+        print(f"Checkpoint path {checkpoint_path} does not exist!")
         return
-    state_dict = torch.load(checkpoint_path)
-    new_state_dict = OrderedDict([(k.replace('ace', 'alias').replace('.Spade', ''), v) for (k, v) in state_dict.items()])
-    new_state_dict._metadata = OrderedDict([(k.replace('ace', 'alias').replace('.Spade', ''), v) for (k, v) in state_dict._metadata.items()])
-    model.load_state_dict(new_state_dict, strict=True)
+    checkpoint = torch.load(checkpoint_path)
+    # Check if checkpoint contains nested generator_state_dict
+    state_dict = checkpoint.get('generator_state_dict', checkpoint)
+    # Create new state dictionary with modified keys
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        # Replace 'ace' with 'alias' and remove '.Spade' if present
+        new_key = k.replace('ace', 'alias').replace('.Spade', '')
+        new_state_dict[new_key] = v
+    # Load state dictionary into model
+    model.load_state_dict(new_state_dict, strict=False)  # Use strict=False to debug missing keys
     model.cuda()
-
+    print(f"Loaded checkpoint from {checkpoint_path}")
 
 def test(opt, test_loader, board, tocg, generator):
     gauss = tgm.image.GaussianBlur((15, 15), (3, 3))
@@ -123,7 +130,7 @@ def test(opt, test_loader, board, tocg, generator):
             densepose = inputs['densepose'].cuda()
             im = inputs['image']
             input_label, input_parse_agnostic = label.cuda(), parse_agnostic.cuda()
-            pre_clothes_mask = torch.FloatTensor((pre_clothes_mask.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
+            pre_clothes_mask = torch.FloatTensor((pre_clothes_mask.detach().cpu().numpy() > 0.5).astype(np.float64)).cuda()
 
             # down
             pose_map_down = F.interpolate(pose_map, size=(opt.cond_G_input_height, opt.cond_G_input_width), mode='bilinear')
@@ -144,7 +151,7 @@ def test(opt, test_loader, board, tocg, generator):
             flow_list_taco, fake_segmap, _, warped_clothmask_taco, flow_list_tvob, _, _, = tocg(input1, input2)
             
             # warped cloth mask one hot 
-            warped_cm_onehot = torch.FloatTensor((warped_clothmask_taco.detach().cpu().numpy() > 0.5).astype(np.float)).cuda()
+            warped_cm_onehot = torch.FloatTensor((warped_clothmask_taco.detach().cpu().numpy() > 0.5).astype(np.float64)).cuda()
             
             cloth_mask = torch.ones_like(fake_segmap)
             cloth_mask[:,3:4, :, :] = warped_clothmask_taco
@@ -212,7 +219,7 @@ def test(opt, test_loader, board, tocg, generator):
             for i in range(shape[0]):
                 grid = make_image_grid([(clothes[i].cpu() / 2 + 0.5), (pre_clothes_mask[i].cpu()).expand(3, -1, -1), visualize_segmap(parse_agnostic.cpu(), batch=i), ((densepose.cpu()[i]+1)/2),
                                         (warped_cloth_taco[i].cpu().detach() / 2 + 0.5), (warped_clothmask_taco[i].cpu().detach()).expand(3, -1, -1), visualize_segmap(fake_parse_gauss.cpu(), batch=i),
-                                        (pose_map[i].cpu()/2 +0.5), (warped_cloth_taco[i].cpu()/2 + 0.5), (agnostic[i].cpu()/2 + 0.5),
+                                        (pose_map[i].cpu()/2 +0.5), (warped_cloth_taco[i].cpu()/2 +0.5), (agnostic[i].cpu()/2 +0.5),
                                         (im[i]/2 +0.5), (output[i].cpu()/2 +0.5)],
                                         nrow=4)
                 unpaired_name = (inputs['c_name']['paired'][i].split('.')[0] + '_' + inputs['c_name'][opt.datasetting][i].split('.')[0] + '.png')
