@@ -8,7 +8,6 @@ import os.path as osp
 import numpy as np
 import json
 
-
 class CPDatasetTest(data.Dataset):
     """
         Test Dataset for CP-VTON.
