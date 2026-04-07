@@ -102,7 +102,7 @@ We did not apply such additional technique, since it was not included in a datas
 
 ## Acknowledgments
 
-This repository is built based on HR-VITON repository. Thanks for the great work.
+This repository is built based on HR-VITON repository. Thanks for the great work. Contribiuted.
 
 ## Citation
 
